@@ -1,0 +1,108 @@
+--Create New Table
+SELECT *
+INTO loans_analytics
+from loans_staging;
+
+
+-- ===========================================================
+-- 1. Preview Data
+-- ===========================================================
+Select TOP 10 * FROM loans_analytics;
+
+
+-- ===========================================================
+-- 2. Adding Default Flag & Updating Values
+-- ===========================================================
+ALTER TABLE loans_analytics
+ADD default_flag INT;
+
+UPDATE loans_analytics
+SET default_flag = 
+    CASE
+        WHEN loan_status = 'charged off' THEN 1
+        WHEN loan_status LIKE 'Late%' THEN 1
+        ELSE 0
+    END;
+
+SELECT loan_status, default_flag
+from loans_analytics;
+
+
+-- ===========================================================
+-- 3. Adding Column risk_category & Updating Values
+-- ===========================================================
+ALTER TABLE loans_analytics
+add risk_category NVARCHAR(50);
+
+UPDATE loans_analytics
+SET risk_category = 
+    CASE
+        WHEN debt_to_income > 30 THEN 'High Risk'
+        When debt_to_income BETWEEN 15 AND 30 THEN 'Medium Risk'
+        ELSE 'Low Risk'
+    END;
+
+SELECT debt_to_income, risk_category
+FROM loans_analytics;
+
+
+-- ===========================================================
+-- 4. Handling Missing Value
+-- ===========================================================
+ALTER TABLE loans_analytics
+ADD months_since_last_delinq_clean INT,
+    no_delinq_flag INT;
+
+UPDATE loans_analytics
+SET
+    months_since_last_delinq_clean = COALESCE(months_since_last_delinq, 999),
+    no_delinq_flag = CASE
+        WHEN months_since_last_delinq IS NULL THEN 1
+        ELSE 0
+    END;
+
+
+-- ===========================================================
+-- 5. Feature Engineering
+-- ===========================================================
+ALTER TABLE loans_analytics
+ADD credit_utlization_ratio FLOAT,
+    payment_ratio FLOAT,
+    deliq_flag INT;
+
+UPDATE loans_analytics
+SET
+    credit_utlization_ratio = total_credit_utilized / NULLIF(total_credit_limit, 0),
+    payment_ratio = paid_total / NULLIF(loan_amount, 0),
+    deliq_flag = CASE
+        WHEN delinq_2y > 0 THEN 1 ELSE 0
+    END;
+
+SELECT credit_utlization_ratio, payment_ratio, deliq_flag
+FROM loans_analytics;
+
+
+-- ===========================================================
+-- Quick Checks
+-- Default Distribution
+-- ===========================================================
+
+SELECT default_flag, count(*)
+FROM loans_analytics
+GROUP BY default_flag;
+
+-- ===========================================================
+-- Risk Distribution
+-- ===========================================================
+SELECT risk_category, COUNT(*)
+FROM loans_analytics
+GROUP BY risk_category;
+
+-- ===========================================================
+-- Check Ratios
+-- ===========================================================
+SELECT TOP 10
+    credit_utlization_ratio,payment_ratio
+from loans_analytics;
+
+    
